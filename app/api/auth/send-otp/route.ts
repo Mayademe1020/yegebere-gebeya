@@ -1,143 +1,56 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { EthiopianDataUtils } from '@/lib/ethiopian/data';
-
-// Mock OTP storage (in production, use Redis or database)
-const otpStorage = new Map<string, { otp: string; expires: number; method: string }>();
-
-// Generate 6-digit OTP
-function generateOTP(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-// Mock Twilio SMS function
-async function sendSMS(phoneNumber: string, otp: string): Promise<boolean> {
-  try {
-    // In production, use actual Twilio API
-    console.log(`SMS to ${phoneNumber}: Your Yegebere Gebeya verification code is: ${otp}`);
-    
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // For demo purposes, always return success
-    return true;
-  } catch (error) {
-    console.error('SMS sending failed:', error);
-    return false;
-  }
-}
-
-// Mock Telegram Bot function
-async function sendTelegram(phoneNumber: string, otp: string): Promise<boolean> {
-  try {
-    // In production, use actual Telegram Bot API
-    console.log(`Telegram to ${phoneNumber}: Your Yegebere Gebeya verification code is: ${otp}`);
-    
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    // For demo purposes, always return success
-    return true;
-  } catch (error) {
-    console.error('Telegram sending failed:', error);
-    return false;
-  }
-}
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db/prisma";
+import { EthiopianDataUtils } from "@/lib/ethiopian/data";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { phoneNumber, method = 'sms' } = body;
+    const { phoneNumber, channel = "sms" } = await request.json();
 
-    // Validate phone number
-    if (!phoneNumber || typeof phoneNumber !== 'string') {
+    if (!phoneNumber) {
       return NextResponse.json(
-        { success: false, message: 'Phone number is required' },
+        { error: "Phone number is required" },
         { status: 400 }
       );
     }
 
-    // Validate Ethiopian phone number format
+    // Normalize phone number
     const normalizedPhone = EthiopianDataUtils.normalizePhoneNumber(phoneNumber);
+    
     if (!normalizedPhone) {
       return NextResponse.json(
-        { success: false, message: 'Invalid Ethiopian phone number format' },
+        { error: "Invalid Ethiopian phone number" },
         { status: 400 }
       );
     }
 
-    // Validate method
-    if (!['sms', 'telegram'].includes(method)) {
-      return NextResponse.json(
-        { success: false, message: 'Invalid delivery method' },
-        { status: 400 }
-      );
-    }
+    // For development, use hardcoded OTP
+    const otp = "123456";
+    const expiresAt = new Date(Date.now() + 3 * 60 * 1000); // 3 minutes
 
-    // Generate OTP
-    const otp = generateOTP();
-    const expires = Date.now() + (5 * 60 * 1000); // 5 minutes
+    // Store OTP in database
+    await prisma.oTPVerification.create({
+      data: {
+        phoneNumber: normalizedPhone,
+        otp,
+        type: channel,
+        expiresAt,
+      },
+    });
 
-    // Store OTP
-    otpStorage.set(normalizedPhone, { otp, expires, method });
-
-    // Send OTP based on method
-    let sent = false;
-    if (method === 'sms') {
-      sent = await sendSMS(normalizedPhone, otp);
-    } else if (method === 'telegram') {
-      sent = await sendTelegram(normalizedPhone, otp);
-    }
-
-    if (!sent) {
-      // Try fallback method
-      const fallbackMethod = method === 'sms' ? 'telegram' : 'sms';
-      if (fallbackMethod === 'sms') {
-        sent = await sendSMS(normalizedPhone, otp);
-      } else {
-        sent = await sendTelegram(normalizedPhone, otp);
-      }
-      
-      if (sent) {
-        // Update storage with fallback method
-        otpStorage.set(normalizedPhone, { otp, expires, method: fallbackMethod });
-      }
-    }
-
-    if (!sent) {
-      return NextResponse.json(
-        { success: false, message: 'Failed to send verification code. Please try again.' },
-        { status: 500 }
-      );
-    }
-
-    // For development, log the OTP
-    console.log(`OTP for ${normalizedPhone}: ${otp} (expires in 5 minutes)`);
+    // In development, we'll just return success without actually sending
+    console.log(`OTP for ${normalizedPhone}: ${otp} (via ${channel})`);
 
     return NextResponse.json({
       success: true,
-      message: `Verification code sent via ${method}`,
-      phoneNumber: normalizedPhone,
-      method: method
+      message: `Verification code sent via ${channel}`,
+      // For development only - remove in production
+      devOtp: otp
     });
-
   } catch (error) {
-    console.error('Send OTP error:', error);
+    console.error("Error sending OTP:", error);
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { error: "Failed to send verification code" },
       { status: 500 }
     );
   }
 }
-
-// Clean up expired OTPs periodically
-setInterval(() => {
-  const now = Date.now();
-  for (const [phone, data] of otpStorage.entries()) {
-    if (data.expires < now) {
-      otpStorage.delete(phone);
-    }
-  }
-}, 60000); // Clean up every minute
-
-// Export OTP storage for verification endpoint
-export { otpStorage };
