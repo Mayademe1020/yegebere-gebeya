@@ -1,0 +1,237 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  phoneNumber       String   @unique
+  name              String?
+  profileImage      String?
+  isVerified        Boolean  @default(false)
+  language          String   @default("am") // am=Amharic, or=Oromo, en=English
+  region            String?
+  zone              String?
+  woreda            String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  lastLoginAt       DateTime?
+  
+  // Relations
+  animals           Animal[]
+  listings          Listing[]
+  sentMessages      Message[] @relation("MessageSender")
+  receivedMessages  Message[] @relation("MessageReceiver")
+  consultations     VetConsultation[]
+  
+  @@map("users")
+}
+
+model Animal {
+  id              String   @id @default(cuid())
+  animalId        String   @unique // Auto-generated: UserInitials + Type + Sequence + EthiopianDate
+  name            String?
+  type            String   // cattle, goat, sheep, poultry, etc.
+  breed           String?
+  age             Int?     // in months
+  gender          String?  // male, female
+  weight          Float?   // in kg
+  color           String?
+  healthStatus    String   @default("healthy") // healthy, sick, recovering
+  description     String?
+  images          String[] // Array of image URLs
+  videos          String[] // Array of video URLs
+  isActive        Boolean  @default(true)
+  
+  // Owner
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  // Relations
+  healthLogs      HealthLog[]
+  listings        Listing[]
+  
+  @@map("animals")
+}
+
+model HealthLog {
+  id          String   @id @default(cuid())
+  animalId    String
+  animal      Animal   @relation(fields: [animalId], references: [id], onDelete: Cascade)
+  
+  logType     String   // vaccination, treatment, checkup, feeding, breeding
+  description String
+  date        DateTime
+  cost        Float?   // in ETB
+  vetName     String?
+  notes       String?
+  images      String[] // Supporting images
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("health_logs")
+}
+
+model Listing {
+  id              String   @id @default(cuid())
+  title           String
+  description     String
+  price           Float    // in ETB
+  currency        String   @default("ETB")
+  category        String   // cattle, goat, sheep, poultry, feed, equipment
+  subcategory     String?
+  
+  // Animal reference (if selling an animal)
+  animalId        String?
+  animal          Animal?  @relation(fields: [animalId], references: [id])
+  
+  // Media
+  images          String[] // Required: at least 1 image
+  videos          String[] // Required: at least 1 video for verification
+  
+  // Verification
+  isVideoVerified Boolean  @default(false)
+  isVetInspected  Boolean  @default(false)
+  verificationNotes String?
+  
+  // Location
+  region          String
+  zone            String?
+  woreda          String?
+  specificLocation String?
+  
+  // Status
+  status          String   @default("active") // active, sold, expired, suspended
+  isPromoted      Boolean  @default(false)
+  
+  // Seller
+  sellerId        String
+  seller          User     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  expiresAt       DateTime // Auto-expire after 30 days
+  
+  // Relations
+  messages        Message[]
+  
+  @@map("listings")
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  content     String
+  messageType String   @default("text") // text, image, location
+  
+  // Participants
+  senderId    String
+  sender      User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId  String
+  receiver    User     @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  // Context (optional - for marketplace inquiries)
+  listingId   String?
+  listing     Listing? @relation(fields: [listingId], references: [id])
+  
+  // Status
+  isRead      Boolean  @default(false)
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("messages")
+}
+
+model VetConsultation {
+  id          String   @id @default(cuid())
+  question    String
+  category    String   // health, breeding, feeding, general
+  urgency     String   @default("normal") // low, normal, high, emergency
+  
+  // User
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Response
+  answer      String?
+  answeredBy  String?  // Vet name or admin
+  answeredAt  DateTime?
+  
+  // Media
+  images      String[] // User can attach images
+  
+  // Status
+  status      String   @default("pending") // pending, answered, closed
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("vet_consultations")
+}
+
+model OTPVerification {
+  id          String   @id @default(cuid())
+  phoneNumber String
+  otp         String
+  type        String   // sms, telegram
+  purpose     String   @default("login") // login, registration
+  isUsed      Boolean  @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  
+  @@map("otp_verifications")
+}
+
+model EthiopianBreed {
+  id          String   @id @default(cuid())
+  name        String
+  nameAmharic String?
+  nameOromo   String?
+  type        String   // cattle, goat, sheep, poultry
+  description String?
+  characteristics String?
+  isCommon    Boolean  @default(true)
+  
+  @@map("ethiopian_breeds")
+}
+
+model EthiopianLocation {
+  id       String   @id @default(cuid())
+  region   String
+  zone     String?
+  woreda   String?
+  level    String   // region, zone, woreda
+  parentId String?
+  
+  @@map("ethiopian_locations")
+}
+
+model DailyTip {
+  id          String   @id @default(cuid())
+  title       String
+  titleAmharic String?
+  titleOromo  String?
+  content     String
+  contentAmharic String?
+  contentOromo String?
+  category    String   // health, feeding, breeding, general
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  
+  @@map("daily_tips")
+}
