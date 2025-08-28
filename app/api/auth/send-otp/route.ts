@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db/prisma";
 import { EthiopianDataUtils } from "@/lib/ethiopian/data";
 
 export async function POST(request: NextRequest) {
@@ -25,19 +24,8 @@ export async function POST(request: NextRequest) {
 
     // For development, use hardcoded OTP
     const otp = "123456";
-    const expiresAt = new Date(Date.now() + 3 * 60 * 1000); // 3 minutes
 
-    // Store OTP in database
-    await prisma.oTPVerification.create({
-      data: {
-        phoneNumber: normalizedPhone,
-        otp,
-        type: channel,
-        expiresAt,
-      },
-    });
-
-    // In development, we'll just return success without actually sending
+    // Log for development
     console.log(`OTP for ${normalizedPhone}: ${otp} (via ${channel})`);
 
     return NextResponse.json({
