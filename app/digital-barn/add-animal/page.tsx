@@ -1,0 +1,688 @@
+"use client";
+
+import { useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { 
+  Camera, 
+  Upload, 
+  X, 
+  ArrowLeft, 
+  Check,
+  Beef,
+  Circle,
+  Bird,
+  Heart,
+  AlertCircle,
+  Info,
+  Plus
+} from 'lucide-react';
+import { useAuth } from '@/contexts/auth-context';
+import { MobileOptimizedLayout, MobileCard, MobileGrid, MobileHeader } from '@/components/layout/mobile-optimized-layout';
+import { DigitalBarnUtils } from '@/lib/digital-barn/utils';
+import { AnimalType, AnimalRegistrationForm } from '@/lib/digital-barn/types';
+
+const ANIMAL_TYPES: Array<{
+  type: AnimalType;
+  icon: React.ReactNode;
+  nameAm: string;
+  nameEn: string;
+  nameOr: string;
+  emoji: string;
+}> = [
+  {
+    type: 'cattle',
+    icon: <Beef className="h-6 w-6" />,
+    nameAm: 'ላም',
+    nameEn: 'Cattle',
+    nameOr: 'Loon',
+    emoji: '🐄'
+  },
+  {
+    type: 'goat',
+    icon: <Circle className="h-6 w-6" />,
+    nameAm: 'ፍየል',
+    nameEn: 'Goat',
+    nameOr: 'Re\'ee',
+    emoji: '🐐'
+  },
+  {
+    type: 'sheep',
+    icon: <Circle className="h-6 w-6" />,
+    nameAm: 'በግ',
+    nameEn: 'Sheep',
+    nameOr: 'Hoolaa',
+    emoji: '🐑'
+  },
+  {
+    type: 'poultry',
+    icon: <Bird className="h-6 w-6" />,
+    nameAm: 'ዶሮ',
+    nameEn: 'Poultry',
+    nameOr: 'Lukuu',
+    emoji: '🐔'
+  }
+];
+
+const COMMON_BREEDS = {
+  cattle: ['Holstein', 'Jersey', 'Zebu', 'Boran', 'Horro', 'Fogera', 'Sheko'],
+  goat: ['Boer', 'Somali', 'Arsi-Bale', 'Woyto-Guji', 'Afar', 'Nubian'],
+  sheep: ['Dorper', 'Menz', 'Horro', 'Afar', 'Blackhead Somali', 'Washera'],
+  poultry: ['Rhode Island Red', 'Leghorn', 'Australorp', 'Koekoek', 'Local Breed']
+};
+
+export default function AddAnimalPage() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const [language, setLanguage] = useState<'am' | 'or' | 'en'>('am');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Form state
+  const [formData, setFormData] = useState<AnimalRegistrationForm>({
+    photos: [],
+    type: 'cattle',
+    sex: undefined,
+    age: undefined,
+    breed: '',
+    isPregnant: false
+  });
+  
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [showBreedSuggestions, setShowBreedSuggestions] = useState(false);
+
+  const getLocalizedText = (amharic: string, english: string, oromo?: string) => {
+    switch (language) {
+      case 'am': return amharic;
+      case 'or': return oromo || english;
+      case 'en': return english;
+      default: return amharic;
+    }
+  };
+
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+
+    // Validate file types and sizes
+    const validFiles = files.filter(file => {
+      const isValidType = file.type.startsWith('image/');
+      const isValidSize = file.size <= 5 * 1024 * 1024; // 5MB limit
+      return isValidType && isValidSize;
+    });
+
+    if (validFiles.length !== files.length) {
+      setErrors(['Some files were skipped. Please upload images under 5MB.']);
+    }
+
+    // Limit to 5 photos total
+    const remainingSlots = 5 - formData.photos.length;
+    const filesToAdd = validFiles.slice(0, remainingSlots);
+
+    // Create preview URLs
+    const newPreviewUrls = filesToAdd.map(file => URL.createObjectURL(file));
+    
+    setFormData(prev => ({
+      ...prev,
+      photos: [...prev.photos, ...filesToAdd]
+    }));
+    
+    setPreviewUrls(prev => [...prev, ...newPreviewUrls]);
+    setErrors([]);
+  };
+
+  const removePhoto = (index: number) => {
+    // Revoke the URL to prevent memory leaks
+    URL.revokeObjectURL(previewUrls[index]);
+    
+    setFormData(prev => ({
+      ...prev,
+      photos: prev.photos.filter((_, i) => i !== index)
+    }));
+    
+    setPreviewUrls(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    setErrors([]);
+
+    // Validate form
+    const validation = DigitalBarnUtils.validateAnimalRegistration(formData);
+    if (!validation.isValid) {
+      setErrors(validation.errors);
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      // Prepare form data for API
+      const animalData = {
+        userId: user?.id,
+        type: formData.type,
+        name: formData.name,
+        breed: formData.breed,
+        sex: formData.sex,
+        ageInMonths: formData.age,
+        weight: formData.weight,
+        color: formData.color,
+        photos: formData.photos,
+        videos: formData.videos || [],
+        notes: formData.notes,
+        isPregnant: formData.isPregnant,
+        ownerInitials: user?.name?.split(" ").map(n => n[0]).join("") || "AT",
+      };
+
+      // Call API to create animal
+      const response = await fetch("/api/animals", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(animalData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to register animal");
+      }
+
+      // Success - redirect to animal profile or digital barn
+      if (result.data?.id) {
+        router.push(`/digital-barn/animals/${result.data.id}`);
+      } else {
+        router.push("/digital-barn");
+      }
+    } catch (error) {
+      console.error("Error registering animal:", error);
+      setErrors([error instanceof Error ? error.message : "Failed to register animal. Please try again."]);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getBreedSuggestions = () => {
+    if (!formData.breed) return COMMON_BREEDS[formData.type] || [];
+    
+    return (COMMON_BREEDS[formData.type] || []).filter(breed =>
+      breed.toLowerCase().includes(formData.breed.toLowerCase())
+    );
+  };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center p-8">
+          <div className="w-16 h-16 bg-primary rounded-lg flex items-center justify-center mx-auto mb-4">
+            <Beef className="h-8 w-8 text-white" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+            {getLocalizedText('እባክዎ ይግቡ', 'Please Sign In', 'Maaloo seenaa')}
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            {getLocalizedText('እንስሳ ለመመዝገብ ይግቡ', 'Sign in to register an animal', 'Bineensa galmeessuuf seenaa')}
+          </p>
+          <Button onClick={() => router.push('/')}>
+            {getLocalizedText('ወደ ቤት ይመለሱ', 'Go Home', 'Gara manaatti deebi\'aa')}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <MobileHeader
+        title={getLocalizedText('እንስሳ ይመዝግቡ', 'Register Animal', 'Bineensa galmeessaa')}
+        subtitle={getLocalizedText('አዲስ እንስሳ ወደ ጎተራዎ ይጨምሩ', 'Add new animal to your barn', 'Bineensa haaraa kotaa keessanitti dabalaa')}
+        backButton
+        onBack={() => router.back()}
+      />
+
+      <div className="pb-20 lg:pb-0">
+        <MobileOptimizedLayout>
+          {/* Progress Indicator */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {getLocalizedText('ደረጃ', 'Step', 'Sadarkaa')} {currentStep} {getLocalizedText('ከ', 'of', 'keessaa')} 3
+              </span>
+              <span className="text-sm text-gray-500">
+                {Math.round((currentStep / 3) * 100)}%
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div 
+                className="bg-primary h-2 rounded-full transition-all duration-300"
+                style={{ width: `${(currentStep / 3) * 100}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Error Messages */}
+          {errors.length > 0 && (
+            <MobileCard padding="md" className="mb-6 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
+              <div className="flex items-start">
+                <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 mr-3 flex-shrink-0" />
+                <div>
+                  <h4 className="font-medium text-red-800 dark:text-red-200 mb-1">
+                    {getLocalizedText('ስህተት', 'Error', 'Dogoggora')}
+                  </h4>
+                  <ul className="text-sm text-red-700 dark:text-red-300 space-y-1">
+                    {errors.map((error, index) => (
+                      <li key={index}>• {error}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </MobileCard>
+          )}
+
+          {/* Step 1: Photos and Animal Type */}
+          {currentStep === 1 && (
+            <div className="space-y-6">
+              {/* Photo Upload Section */}
+              <MobileCard padding="lg">
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
+                    <Camera className="h-8 w-8 text-primary" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">
+                    {getLocalizedText('የእንስሳ ፎቶ', 'Animal Photos', 'Suuraa Bineensaa')}
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm">
+                    {getLocalizedText('ቢያንስ አንድ ፎቶ ያስፈልጋል', 'At least one photo is required', 'Yoo xiqqaate suura tokko barbaachisa')}
+                  </p>
+                </div>
+
+                {/* Photo Grid */}
+                <MobileGrid columns={3} gap="sm" className="mb-4">
+                  {previewUrls.map((url, index) => (
+                    <div key={index} className="relative aspect-square">
+                      <img
+                        src={url}
+                        alt={`Animal photo ${index + 1}`}
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                      <button
+                        onClick={() => removePhoto(index)}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                  
+                  {/* Add Photo Button */}
+                  {formData.photos.length < 5 && (
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="aspect-square border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex flex-col items-center justify-center hover:border-primary hover:bg-primary/5 transition-colors"
+                    >
+                      <Plus className="h-6 w-6 text-gray-400 mb-1" />
+                      <span className="text-xs text-gray-500">
+                        {getLocalizedText('ፎቶ ጨምር', 'Add Photo', 'Suuraa dabaluu')}
+                      </span>
+                    </button>
+                  )}
+                </MobileGrid>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handlePhotoUpload}
+                  className="hidden"
+                />
+
+                <div className="flex items-center justify-center">
+                  <Button
+                    onClick={() => fileInputRef.current?.click()}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    {getLocalizedText('ፎቶዎች ይምረጡ', 'Choose Photos', 'Suuraalee filachuu')}
+                  </Button>
+                </div>
+
+                <p className="text-xs text-gray-500 text-center mt-2">
+                  {getLocalizedText('እስከ 5 ፎቶዎች፣ እያንዳንዱ 5MB በታች', 'Up to 5 photos, each under 5MB', 'Hanga suuraa 5, tokkoon tokkoon 5MB gadi')}
+                </p>
+              </MobileCard>
+
+              {/* Animal Type Selection */}
+              <MobileCard padding="lg">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4">
+                  {getLocalizedText('የእንስሳ አይነት', 'Animal Type', 'Gosa Bineensaa')}
+                </h3>
+                
+                <MobileGrid columns={2} gap="md">
+                  {ANIMAL_TYPES.map((animal) => (
+                    <button
+                      key={animal.type}
+                      onClick={() => setFormData(prev => ({ ...prev, type: animal.type }))}
+                      className={`p-4 rounded-lg border-2 transition-all duration-200 ${
+                        formData.type === animal.type
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                      }`}
+                    >
+                      <div className="text-center">
+                        <div className="text-3xl mb-2">{animal.emoji}</div>
+                        <div className="font-medium">
+                          {getLocalizedText(animal.nameAm, animal.nameEn, animal.nameOr)}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </MobileGrid>
+              </MobileCard>
+
+              <Button
+                onClick={() => setCurrentStep(2)}
+                disabled={false}
+                className="w-full h-12"
+              >
+                {getLocalizedText('ቀጣይ', 'Next', 'Itti aanuu')}
+                <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
+              </Button>
+            </div>
+          )}
+
+          {/* Step 2: Basic Information */}
+          {currentStep === 2 && (
+            <div className="space-y-6">
+              <MobileCard padding="lg">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-6">
+                  {getLocalizedText('መሰረታዊ መረጃ', 'Basic Information', 'Odeeffannoo Bu\'uuraa')}
+                </h3>
+
+                <div className="space-y-6">
+                  {/* Sex Selection */}
+                  <div>
+                    <Label className="text-base font-medium mb-3 block">
+                      {getLocalizedText('ጾታ', 'Sex', 'Saala')}
+                    </Label>
+                    <MobileGrid columns={2} gap="md">
+                      <button
+                        onClick={() => setFormData(prev => ({ ...prev, sex: 'male', isPregnant: false }))}
+                        className={`p-4 rounded-lg border-2 transition-all duration-200 ${
+                          formData.sex === 'male'
+                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="text-center">
+                          <div className="text-2xl mb-2">♂️</div>
+                          <div className="font-medium">
+                            {getLocalizedText('ወንድ', 'Male', 'Korma')}
+                          </div>
+                        </div>
+                      </button>
+                      
+                      <button
+                        onClick={() => setFormData(prev => ({ ...prev, sex: 'female' }))}
+                        className={`p-4 rounded-lg border-2 transition-all duration-200 ${
+                          formData.sex === 'female'
+                            ? 'border-pink-500 bg-pink-50 dark:bg-pink-900/20 text-pink-700 dark:text-pink-300'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="text-center">
+                          <div className="text-2xl mb-2">♀️</div>
+                          <div className="font-medium">
+                            {getLocalizedText('ሴት', 'Female', 'Dhalaa')}
+                          </div>
+                        </div>
+                      </button>
+                    </MobileGrid>
+                  </div>
+
+                  {/* Pregnancy Status (only for females) */}
+                  {formData.sex === 'female' && (
+                    <div>
+                      <Label className="text-base font-medium mb-3 block">
+                        {getLocalizedText('የእርግዝና ሁኔታ', 'Pregnancy Status', 'Haala Ulfaa')}
+                      </Label>
+                      <button
+                        onClick={() => setFormData(prev => ({ ...prev, isPregnant: !prev.isPregnant }))}
+                        className={`w-full p-4 rounded-lg border-2 transition-all duration-200 ${
+                          formData.isPregnant
+                            ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center">
+                          <Heart className="h-5 w-5 mr-2" />
+                          <span className="font-medium">
+                            {formData.isPregnant 
+                              ? getLocalizedText('እርጉዝ ነች', 'Pregnant', 'Ulfaa\'aa dha')
+                              : getLocalizedText('እርጉዝ አይደለችም', 'Not Pregnant', 'Ulfaa\'aa miti')
+                            }
+                          </span>
+                          {formData.isPregnant && <Check className="h-5 w-5 ml-2" />}
+                        </div>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Age */}
+                  <div>
+                    <Label htmlFor="age" className="text-base font-medium mb-3 block">
+                      {getLocalizedText('እድሜ (በወር)', 'Age (in months)', 'Umurii (ji\'aan)')}
+                    </Label>
+                    <Input
+                      id="age"
+                      type="number"
+                      min="0"
+                      max="300"
+                      value={formData.age || ''}
+                      onChange={(e) => setFormData(prev => ({ 
+                        ...prev, 
+                        age: e.target.value ? parseInt(e.target.value) : undefined 
+                      }))}
+                      placeholder={getLocalizedText('ምሳሌ: 24', 'e.g., 24', 'Fkf: 24')}
+                      className="h-12 text-base"
+                    />
+                    <p className="text-sm text-gray-500 mt-1">
+                      {getLocalizedText('አማራጭ - እድሜ በወር ያስገቡ', 'Optional - Enter age in months', 'Filannoo - umurii ji\'aan galchaa')}
+                    </p>
+                  </div>
+                </div>
+              </MobileCard>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => setCurrentStep(1)}
+                  variant="outline"
+                  className="flex-1 h-12"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  {getLocalizedText('ተመለስ', 'Back', 'Deebi\'i')}
+                </Button>
+                <Button
+                  onClick={() => setCurrentStep(3)}
+                  className="flex-1 h-12"
+                >
+                  {getLocalizedText('ቀጣይ', 'Next', 'Itti aanuu')}
+                  <ArrowLeft className="h-4 w-4 ml-2 rotate-180" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Additional Details */}
+          {currentStep === 3 && (
+            <div className="space-y-6">
+              <MobileCard padding="lg">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-6">
+                  {getLocalizedText('ተጨማሪ ዝርዝሮች', 'Additional Details', 'Bal\'ina Dabalataa')}
+                </h3>
+
+                <div className="space-y-6">
+                  {/* Breed */}
+                  <div className="relative">
+                    <Label htmlFor="breed" className="text-base font-medium mb-3 block">
+                      {getLocalizedText('ዝርያ', 'Breed', 'Gosa')}
+                    </Label>
+                    <Input
+                      id="breed"
+                      type="text"
+                      value={formData.breed}
+                      onChange={(e) => {
+                        setFormData(prev => ({ ...prev, breed: e.target.value }));
+                        setShowBreedSuggestions(e.target.value.length > 0);
+                      }}
+                      onFocus={() => setShowBreedSuggestions(formData.breed.length > 0)}
+                      onBlur={() => setTimeout(() => setShowBreedSuggestions(false), 200)}
+                      placeholder={getLocalizedText('ምሳሌ: Holstein', 'e.g., Holstein', 'Fkf: Holstein')}
+                      className="h-12 text-base"
+                    />
+                    
+                    {/* Breed Suggestions */}
+                    {showBreedSuggestions && (
+                      <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {getBreedSuggestions().map((breed) => (
+                          <button
+                            key={breed}
+                            onClick={() => {
+                              setFormData(prev => ({ ...prev, breed }));
+                              setShowBreedSuggestions(false);
+                            }}
+                            className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                          >
+                            {breed}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    
+                    <p className="text-sm text-gray-500 mt-1">
+                      {getLocalizedText('አማራጭ - የእንስሳው ዝርያ', 'Optional - Animal breed', 'Filannoo - gosa bineensaa')}
+                    </p>
+                  </div>
+
+                  {/* Preview Animal ID */}
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                    <div className="flex items-center mb-2">
+                      <Info className="h-5 w-5 text-blue-500 mr-2" />
+                      <span className="font-medium text-gray-900 dark:text-gray-100">
+                        {getLocalizedText('የእንስሳ መለያ', 'Animal ID', 'Eenyummaa Bineensaa')}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      {getLocalizedText('ይህ መለያ በራስ-ሰር ይፈጠራል:', 'This ID will be automatically generated:', 'Eenyummaan kun ofumaan ni uumama:')}
+                    </p>
+                    <Badge variant="outline" className="font-mono text-sm">
+                      {DigitalBarnUtils.generateAnimalId(user?.name || 'User', formData.type, 1)}
+                    </Badge>
+                  </div>
+                </div>
+              </MobileCard>
+
+              {/* Summary */}
+              <MobileCard padding="lg" className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+                <h4 className="font-bold text-gray-900 dark:text-gray-100 mb-4">
+                  {getLocalizedText('ማጠቃለያ', 'Summary', 'Cuunfaa')}
+                </h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      {getLocalizedText('አይነት:', 'Type:', 'Gosa:')}
+                    </span>
+                    <span className="font-medium">
+                      {DigitalBarnUtils.getAnimalTypeName(formData.type, language)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      {getLocalizedText('ፎቶዎች:', 'Photos:', 'Suuraalee:')}
+                    </span>
+                    <span className="font-medium">{formData.photos.length}</span>
+                  </div>
+                  {formData.sex && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {getLocalizedText('ጾታ:', 'Sex:', 'Saala:')}
+                      </span>
+                      <span className="font-medium">
+                        {formData.sex === 'male' 
+                          ? getLocalizedText('ወንድ', 'Male', 'Korma')
+                          : getLocalizedText('ሴት', 'Female', 'Dhalaa')
+                        }
+                      </span>
+                    </div>
+                  )}
+                  {formData.age && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {getLocalizedText('እድሜ:', 'Age:', 'Umurii:')}
+                      </span>
+                      <span className="font-medium">
+                        {DigitalBarnUtils.formatAnimalAge(formData.age, language)}
+                      </span>
+                    </div>
+                  )}
+                  {formData.breed && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {getLocalizedText('ዝርያ:', 'Breed:', 'Gosa:')}
+                      </span>
+                      <span className="font-medium">{formData.breed}</span>
+                    </div>
+                  )}
+                  {formData.isPregnant && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {getLocalizedText('እርግዝና:', 'Pregnancy:', 'Ulfaa:')}
+                      </span>
+                      <span className="font-medium text-purple-600">
+                        {getLocalizedText('እርጉዝ', 'Pregnant', 'Ulfaa\'aa')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </MobileCard>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => setCurrentStep(2)}
+                  variant="outline"
+                  className="flex-1 h-12"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  {getLocalizedText('ተመለስ', 'Back', 'Deebi\'i')}
+                </Button>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                  className="flex-1 h-12"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      {getLocalizedText('በመመዝገብ ላይ...', 'Registering...', 'Galmeessuu irratti...')}
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4 mr-2" />
+                      {getLocalizedText('እንስሳ ይመዝግቡ', 'Register Animal', 'Bineensa galmeessaa')}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </MobileOptimizedLayout>
+      </div>
+    </div>
+  );
+}

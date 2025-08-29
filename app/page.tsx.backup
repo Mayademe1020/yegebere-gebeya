@@ -1,0 +1,553 @@
+"use client";
+
+import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
+import { 
+  Search, 
+  MapPin, 
+  Phone, 
+  MessageCircle, 
+  Heart, 
+  Calendar, 
+  Beef, 
+  Circle, 
+  Bird, 
+  Wrench, 
+  Filter, 
+  SlidersHorizontal,
+  BarChart3,
+  Shield,
+  Bot,
+  Stethoscope,
+  TrendingUp,
+  Star,
+  Users,
+  CheckCircle
+} from 'lucide-react';
+import { AuthModal } from '@/components/auth/auth-modal';
+import { LanguageSelector } from '@/components/language-selector';
+import { EnhancedNavigation } from '@/components/navigation/enhanced-navigation';
+import { MobileOptimizedLayout, MobileCard, MobileGrid } from '@/components/layout/mobile-optimized-layout';
+import { EthiopianDataUtils, ANIMAL_CATEGORIES, ETHIOPIAN_REGIONS } from '@/lib/ethiopian/data';
+import { EthiopianCalendar } from '@/lib/ethiopian/calendar';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
+import Link from 'next/link';
+
+// Mock data for guest preview with responsive images
+const MOCK_LISTINGS = [
+  {
+    id: '1',
+    title: 'ጤናማ ላም ለሽያጭ',
+    titleEn: 'Healthy Cattle for Sale',
+    price: 45000,
+    location: 'አዲስ አበባ',
+    locationEn: 'Addis Ababa',
+    region: 'addis-ababa',
+    category: 'cattle',
+    breed: 'Holstein Cross',
+    age: 24, // months
+    gender: 'female',
+    images: ['https://images.unsplash.com/photo-1560114928-40f1f1eb26a0?w=400&h=300&fit=crop&crop=center'],
+    isVideoVerified: true,
+    seller: 'አቶ ተስፋዬ',
+    sellerEn: 'Ato Tesfaye',
+    createdAt: new Date('2024-08-25'),
+  },
+  {
+    id: '2',
+    title: 'የቦር ፍየል ጥንድ',
+    titleEn: 'Boer Goat Pair',
+    price: 12000,
+    location: 'ኦሮሚያ',
+    locationEn: 'Oromia',
+    region: 'oromia',
+    category: 'goat',
+    breed: 'Boer',
+    age: 18,
+    gender: 'mixed',
+    images: ['https://images.unsplash.com/photo-1551218808-94e220e084d2?w=400&h=300&fit=crop&crop=center'],
+    isVideoVerified: true,
+    seller: 'ወ/ሮ ፋጡማ',
+    sellerEn: 'W/ro Fatuma',
+    createdAt: new Date('2024-08-26'),
+  },
+  {
+    id: '3',
+    title: 'የተሻሻለ ዶሮ',
+    titleEn: 'Improved Chickens',
+    price: 800,
+    location: 'አማራ',
+    locationEn: 'Amhara',
+    region: 'amhara',
+    category: 'poultry',
+    breed: 'Rhode Island Red',
+    age: 6,
+    gender: 'mixed',
+    images: ['https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?w=400&h=300&fit=crop&crop=center'],
+    isVideoVerified: false,
+    seller: 'አቶ ሙሉጌታ',
+    sellerEn: 'Ato Mulugeta',
+    createdAt: new Date('2024-08-27'),
+  },
+  {
+    id: '4',
+    title: 'የአገር በግ',
+    titleEn: 'Local Sheep',
+    price: 3500,
+    location: 'ትግራይ',
+    locationEn: 'Tigray',
+    region: 'tigray',
+    category: 'sheep',
+    breed: 'Menz',
+    age: 12,
+    gender: 'male',
+    images: ['https://images.unsplash.com/photo-1583337130417-3346a1be7dee?w=400&h=300&fit=crop&crop=center'],
+    isVideoVerified: true,
+    seller: 'አቶ ገብረ',
+    sellerEn: 'Ato Gebre',
+    createdAt: new Date('2024-08-24'),
+  },
+];
+
+// New features showcase
+const FEATURED_SERVICES = [
+  {
+    id: 'market-intelligence',
+    title: 'የገበያ መረጃ ማዕከል',
+    titleEn: 'Market Intelligence',
+    description: 'የእንስሳት ዋጋ እና የገበያ ትንተና',
+    descriptionEn: 'Real-time livestock prices and market analysis',
+    icon: <BarChart3 className="h-6 w-6" />,
+    href: '/market-intelligence',
+    badge: 'አዲስ',
+    color: 'bg-blue-500'
+  },
+  {
+    id: 'financial-services',
+    title: 'የገንዘብ አገልግሎት',
+    titleEn: 'Financial Services',
+    description: 'መድን እና ብድር አገልግሎት',
+    descriptionEn: 'Insurance and loan services',
+    icon: <Shield className="h-6 w-6" />,
+    href: '/financial-services',
+    badge: '',
+    color: 'bg-green-500'
+  },
+  {
+    id: 'ai-assistant',
+    title: 'AI የእንስሳት ረዳት',
+    titleEn: 'AI Livestock Assistant',
+    description: '24/7 የእንስሳት እርባታ ምክር',
+    descriptionEn: '24/7 livestock farming advice',
+    icon: <Bot className="h-6 w-6" />,
+    href: '/ai-assistant',
+    badge: 'ሙቅ',
+    color: 'bg-purple-500'
+  },
+  {
+    id: 'vet-services',
+    title: 'የእንስሳት ሐኪም',
+    titleEn: 'Veterinary Services',
+    description: 'ባለሙያ የእንስሳት ሐኪሞች',
+    descriptionEn: 'Professional veterinary consultations',
+    icon: <Stethoscope className="h-6 w-6" />,
+    href: '/vet-services',
+    badge: '',
+    color: 'bg-red-500'
+  }
+];
+
+export default function HomePage() {
+  const [language, setLanguage] = useState<'am' | 'or' | 'en'>('am');
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedRegion, setSelectedRegion] = useState<string>('all');
+  const [priceRange, setPriceRange] = useState<number[]>([0, 100000]);
+  const [selectedGender, setSelectedGender] = useState<string>('all');
+  const [ageRange, setAgeRange] = useState<number[]>([0, 60]);
+  const [showVerifiedOnly, setShowVerifiedOnly] = useState(false);
+  const [currentDate, setCurrentDate] = useState<string>('');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+  useEffect(() => {
+    // Set Ethiopian date
+    const ethDate = EthiopianCalendar.getCurrentEthiopianDate();
+    const formattedDate = EthiopianCalendar.formatEthiopianDate(ethDate, language === 'en' ? 'en' : 'am');
+    setCurrentDate(formattedDate);
+  }, [language]);
+
+  const handleAuthAction = () => {
+    setIsAuthModalOpen(true);
+  };
+
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'cattle': return <Beef className="h-4 w-4 sm:h-5 sm:w-5" />;
+      case 'goat': return <Circle className="h-4 w-4 sm:h-5 sm:w-5" />;
+      case 'sheep': return <Circle className="h-4 w-4 sm:h-5 sm:w-5" />;
+      case 'poultry': return <Bird className="h-4 w-4 sm:h-5 sm:w-5" />;
+      case 'equipment': return <Wrench className="h-4 w-4 sm:h-5 sm:w-5" />;
+      default: return <Search className="h-4 w-4 sm:h-5 sm:w-5" />;
+    }
+  };
+
+  const getLocalizedText = (amharic: string, english: string, oromo?: string) => {
+    switch (language) {
+      case 'am': return amharic;
+      case 'or': return oromo || english;
+      case 'en': return english;
+      default: return amharic;
+    }
+  };
+
+  const getBadgeColor = (badge?: string) => {
+    switch (badge) {
+      case 'አዲስ':
+        return 'bg-green-100 text-green-800 border-green-300';
+      case 'ሙቅ':
+        return 'bg-red-100 text-red-800 border-red-300';
+      default:
+        return 'bg-blue-100 text-blue-800 border-blue-300';
+    }
+  };
+
+  const filteredListings = MOCK_LISTINGS.filter(listing => {
+    const matchesSearch = searchQuery === '' || 
+      listing.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      listing.titleEn.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      listing.breed.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesCategory = selectedCategory === 'all' || listing.category === selectedCategory;
+    const matchesRegion = selectedRegion === 'all' || listing.region === selectedRegion;
+    const matchesPrice = listing.price >= priceRange[0] && listing.price <= priceRange[1];
+    const matchesGender = selectedGender === 'all' || listing.gender === selectedGender || listing.gender === 'mixed';
+    const matchesAge = listing.age >= ageRange[0] && listing.age <= ageRange[1];
+    const matchesVerification = !showVerifiedOnly || listing.isVideoVerified;
+    
+    return matchesSearch && matchesCategory && matchesRegion && matchesPrice && matchesGender && matchesAge && matchesVerification;
+  });
+
+  const clearFilters = () => {
+    setSelectedCategory('all');
+    setSelectedRegion('all');
+    setPriceRange([0, 100000]);
+    setSelectedGender('all');
+    setAgeRange([0, 60]);
+    setShowVerifiedOnly(false);
+    setSearchQuery('');
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <EnhancedNavigation />
+      
+      <div className="pb-20 lg:pb-0">
+        <MobileOptimizedLayout>
+          {/* Hero Section */}
+          <div className="text-center py-8 sm:py-12 bg-gradient-to-br from-green-50 to-blue-50 dark:from-gray-800 dark:to-gray-900 rounded-lg mb-8">
+            <div className="flex items-center justify-center mb-4">
+              <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center mr-4">
+                <Beef className="h-6 w-6 text-white" />
+              </div>
+              <div className="text-left">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">
+                  {getLocalizedText('የገበሬ ገበያ', 'Yegebere Gebeya', 'Gabaa Qonnaa')}
+                </h1>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{currentDate}</p>
+              </div>
+            </div>
+            
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+              {getLocalizedText(
+                'የኢትዮጵያ የእንስሳት ገበያ',
+                'Ethiopia\'s Livestock Marketplace',
+                'Gabaa Bineensaa Itoophiyaa'
+              )}
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-2xl mx-auto">
+              {getLocalizedText(
+                'ላም፣ ፍየል፣ በግ እና ዶሮ በቀላሉ ይግዙ እና ይሽጡ። ተመዝግበው የእርስዎን ዲጂታል ጎተራ ይጀምሩ።',
+                'Buy and sell cattle, goats, sheep, and poultry with ease. Register to start your digital barn.',
+                'Loon, re\'ee, hoolaa fi lukuu salphaadhaan bitaatii gurguraa.'
+              )}
+            </p>
+
+            <Button size="xl" onClick={handleAuthAction} className="mb-8">
+              <Phone className="h-5 w-5 mr-2" />
+              {getLocalizedText('ዛሬ ይመዝገቡ', 'Register Today', 'Har\'a Galmaa\'aa')}
+            </Button>
+
+            {/* Stats */}
+            <MobileGrid columns={3} gap="sm" className="max-w-md mx-auto">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-primary">1000+</div>
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                  {getLocalizedText('ተጠቃሚዎች', 'Users', 'Fayyadamtoota')}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-primary">500+</div>
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                  {getLocalizedText('እንስሳት', 'Animals', 'Bineensota')}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-primary">50+</div>
+                <div className="text-xs text-gray-600 dark:text-gray-400">
+                  {getLocalizedText('ከተሞች', 'Cities', 'Magaalota')}
+                </div>
+              </div>
+            </MobileGrid>
+          </div>
+
+          {/* Featured Services */}
+          <div className="mb-8">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
+              <Star className="h-5 w-5 mr-2 text-yellow-500" />
+              {getLocalizedText('አዲስ አገልግሎቶች', 'New Services', 'Tajaajila Haaraa')}
+            </h3>
+            
+            <MobileGrid columns={2} gap="md">
+              {FEATURED_SERVICES.map((service) => (
+                <Link key={service.id} href={service.href}>
+                  <MobileCard 
+                    padding="md" 
+                    clickable 
+                    className="h-full hover:shadow-lg transition-all duration-200"
+                  >
+                    <div className="flex flex-col h-full">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className={`p-2 ${service.color} rounded-lg text-white`}>
+                          {service.icon}
+                        </div>
+                        {service.badge && (
+                          <Badge className={getBadgeColor(service.badge)}>
+                            {service.badge}
+                          </Badge>
+                        )}
+                      </div>
+                      <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                        {language === 'en' ? service.titleEn : service.title}
+                      </h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 flex-1">
+                        {language === 'en' ? service.descriptionEn : service.description}
+                      </p>
+                      <div className="flex items-center mt-3 text-primary text-sm font-medium">
+                        <span>{getLocalizedText('ይጠቀሙ', 'Try Now', 'Amma Fayyadami')}</span>
+                        <TrendingUp className="h-4 w-4 ml-1" />
+                      </div>
+                    </div>
+                  </MobileCard>
+                </Link>
+              ))}
+            </MobileGrid>
+          </div>
+
+          {/* Search Section */}
+          <div className="mb-6">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+              {getLocalizedText('እንስሳት ይፈልጉ', 'Search Animals', 'Bineensa Barbaadi')}
+            </h3>
+            
+            <div className="flex gap-2 mb-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                <Input
+                  type="text"
+                  placeholder={getLocalizedText('እንስሳ ይፈልጉ...', 'Search animals...', 'Bineensa barbaadi...')}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 h-12"
+                />
+              </div>
+              
+              <Sheet open={isFilterOpen} onOpenChange={setIsFilterOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-12 w-12">
+                    <SlidersHorizontal className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-80">
+                  <SheetHeader>
+                    <SheetTitle>{getLocalizedText('ማጣሪያዎች', 'Filters', 'Gingilchaa')}</SheetTitle>
+                  </SheetHeader>
+                  <div className="mt-6 space-y-6">
+                    {/* Category Filter */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        {getLocalizedText('ዓይነት', 'Category', 'Gosa')}
+                      </label>
+                      <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">{getLocalizedText('ሁሉም', 'All', 'Hunda')}</SelectItem>
+                          {ANIMAL_CATEGORIES.map((category) => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {EthiopianDataUtils.getLocalizedName(category, language)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Price Range */}
+                    <div>
+                      <label className="block text-sm font-medium mb-2">
+                        {getLocalizedText('የዋጋ ክልል', 'Price Range', 'Hangii Gatii')} ({EthiopianDataUtils.formatETB(priceRange[0])} - {EthiopianDataUtils.formatETB(priceRange[1])})
+                      </label>
+                      <Slider
+                        value={priceRange}
+                        onValueChange={setPriceRange}
+                        max={100000}
+                        min={0}
+                        step={1000}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <Button onClick={clearFilters} variant="outline" className="w-full">
+                      {getLocalizedText('ማጣሪያዎችን አጽዳ', 'Clear Filters', 'Gingilchaa haqii')}
+                    </Button>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
+
+            {/* Category Pills */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              <Button
+                variant={selectedCategory === 'all' ? 'default' : 'outline'}
+                onClick={() => setSelectedCategory('all')}
+                size="sm"
+              >
+                {getLocalizedText('ሁሉም', 'All', 'Hunda')}
+              </Button>
+              {ANIMAL_CATEGORIES.slice(0, 3).map((category) => (
+                <Button
+                  key={category.id}
+                  variant={selectedCategory === category.id ? 'default' : 'outline'}
+                  onClick={() => setSelectedCategory(category.id)}
+                  size="sm"
+                >
+                  {getCategoryIcon(category.id)}
+                  <span className="ml-2">{EthiopianDataUtils.getLocalizedName(category, language)}</span>
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Listings */}
+          <div className="mb-8">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                {getLocalizedText('የቅርብ ጊዜ ዝርዝሮች', 'Recent Listings', 'Tarreeffama Dhiyeenyaa')}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {filteredListings.length} {getLocalizedText('ውጤቶች', 'results', 'bu\'aa')}
+              </p>
+            </div>
+
+            <MobileGrid columns={1} gap="md" className="sm:grid-cols-2">
+              {filteredListings.slice(0, 4).map((listing) => (
+                <MobileCard key={listing.id} padding="md" clickable onClick={handleAuthAction}>
+                  <div className="flex gap-4">
+                    <div className="relative w-24 h-24 sm:w-32 sm:h-32 flex-shrink-0">
+                      <img
+                        src={listing.images[0]}
+                        alt={language === 'en' ? listing.titleEn : listing.title}
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                      {listing.isVideoVerified && (
+                        <Badge className="absolute -top-2 -right-2 bg-green-600 text-white text-xs">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          {getLocalizedText('ተረጋግጧል', 'Verified', 'Mirkaneeffame')}
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-1 truncate">
+                        {language === 'en' ? listing.titleEn : listing.title}
+                      </h4>
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2 flex items-center">
+                        <MapPin className="h-3 w-3 mr-1" />
+                        {language === 'en' ? listing.locationEn : listing.location}
+                      </p>
+                      <p className="text-lg font-bold text-primary mb-2">
+                        {EthiopianDataUtils.formatETB(listing.price)}
+                      </p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-500">
+                          {listing.breed} • {listing.age} {getLocalizedText('ወር', 'months', 'ji\'oota')}
+                        </span>
+                        <Button size="sm" variant="outline">
+                          <MessageCircle className="h-3 w-3 mr-1" />
+                          {getLocalizedText('መልዕክት', 'Message', 'Ergaa')}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </MobileCard>
+              ))}
+            </MobileGrid>
+
+            {filteredListings.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-gray-500 mb-4">
+                  {getLocalizedText('ምንም ውጤት አልተገኘም', 'No results found', 'Bu\'aan hin argamne')}
+                </p>
+                <Button onClick={clearFilters} variant="outline">
+                  {getLocalizedText('ማጣሪያዎችን አጽዳ', 'Clear Filters', 'Gingilchaa haqii')}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Call to Action */}
+          <MobileCard padding="lg" className="bg-primary text-primary-foreground text-center">
+            <h3 className="text-xl font-bold mb-2">
+              {getLocalizedText(
+                'ዛሬ ይመዝገቡ እና የእርስዎን ዲጂታል ጎተራ ይጀምሩ',
+                'Register Today and Start Your Digital Barn',
+                'Har\'a galmaa\'aa fi kotaa dijitaalaa keessan jalqabaa'
+              )}
+            </h3>
+            <p className="mb-4 opacity-90">
+              {getLocalizedText(
+                'የእንስሳቶችዎን ጤንነት ይከታተሉ፣ በገበያ ይሳተፉ እና ከእንስሳት ሐኪሞች ጋር ይማክሩ',
+                'Track your animals\' health, participate in the marketplace, and consult with veterinarians',
+                'Fayyaa bineensota keessanii hordofaa, gabaa keessatti hirmaadhaatii'
+              )}
+            </p>
+            <Button size="lg" variant="secondary" onClick={handleAuthAction}>
+              <Phone className="h-5 w-5 mr-2" />
+              {getLocalizedText('ዛሬ ይመዝገቡ', 'Register Today', 'Har\'a Galmaa\'aa')}
+            </Button>
+          </MobileCard>
+        </MobileOptimizedLayout>
+      </div>
+
+      {/* Auth Modal */}
+      <AuthModal 
+        isOpen={isAuthModalOpen} 
+        onClose={() => setIsAuthModalOpen(false)}
+        language={language}
+      />
+    </div>
+  );
+}

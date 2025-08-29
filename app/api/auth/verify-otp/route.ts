@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { EthiopianDataUtils } from "@/lib/ethiopian/data";
 
+// Dummy phone numbers for testing
+const DUMMY_PHONES = ['913623785', '911111112'];
+
 export async function POST(request: NextRequest) {
   try {
     const { phoneNumber, otp } = await request.json();
@@ -12,14 +15,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Normalize phone number
-    const normalizedPhone = EthiopianDataUtils.normalizePhoneNumber(phoneNumber);
+    // Check if it's a dummy phone number
+    const isDummyPhone = DUMMY_PHONES.includes(phoneNumber);
     
-    if (!normalizedPhone) {
-      return NextResponse.json(
-        { error: "Invalid Ethiopian phone number" },
-        { status: 400 }
-      );
+    let normalizedPhone;
+    if (isDummyPhone) {
+      normalizedPhone = phoneNumber; // Use dummy phone as-is
+    } else {
+      // Normalize Ethiopian phone number
+      normalizedPhone = EthiopianDataUtils.normalizePhoneNumber(phoneNumber);
+      
+      if (!normalizedPhone) {
+        return NextResponse.json(
+          { error: "Invalid phone number" },
+          { status: 400 }
+        );
+      }
     }
 
     // For development, accept hardcoded OTP
@@ -28,11 +39,12 @@ export async function POST(request: NextRequest) {
       const user = {
         id: `user_${normalizedPhone.replace(/\D/g, '')}`,
         phoneNumber: normalizedPhone,
-        name: `User ${normalizedPhone.slice(-4)}`,
-        isVerified: true
+        name: isDummyPhone ? `Test User ${normalizedPhone}` : `User ${normalizedPhone.slice(-4)}`,
+        isVerified: true,
+        userType: isDummyPhone ? 'test' : 'regular'
       };
 
-      console.log(`User authenticated: ${normalizedPhone}`);
+      console.log(`User authenticated: ${normalizedPhone} (${isDummyPhone ? 'dummy' : 'ethiopian'})`);
 
       return NextResponse.json({
         success: true,

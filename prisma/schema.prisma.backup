@@ -60,7 +60,6 @@ model Animal {
   
   // Relations
   healthLogs      HealthLog[]
-  milkRecords     MilkRecord[]
   listings        Listing[]
   
   @@map("animals")
@@ -230,23 +229,4 @@ model DailyTip {
   createdAt   DateTime @default(now())
   
   @@map("daily_tips")
-}
-
-model MilkRecord {
-  id          String   @id @default(cuid())
-  animalId    String
-  animal      Animal   @relation(fields: [animalId], references: [id], onDelete: Cascade)
-  
-  date        DateTime // Ethiopian date when milk was collected
-  morningMilk Float?   // in liters
-  eveningMilk Float?   // in liters
-  totalMilk   Float    // calculated total
-  pricePerLiter Float? // in ETB
-  totalValue  Float?   // calculated total value
-  notes       String?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  @@map("milk_records")
 }

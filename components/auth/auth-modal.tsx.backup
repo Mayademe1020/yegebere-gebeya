@@ -16,7 +16,6 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Phone, MessageCircle, Loader2, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { EthiopianDataUtils } from '@/lib/ethiopian/data';
-import { useAuth } from '@/contexts/auth-context';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -28,7 +27,6 @@ type AuthStep = 'phone' | 'otp' | 'profile';
 type OTPMethod = 'sms' | 'telegram';
 
 export function AuthModal({ isOpen, onClose, language }: AuthModalProps) {
-  const { login, updateProfile } = useAuth();
   const [step, setStep] = useState<AuthStep>('phone');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
@@ -37,7 +35,6 @@ export function AuthModal({ isOpen, onClose, language }: AuthModalProps) {
   const [otpMethod, setOtpMethod] = useState<OTPMethod>('sms');
   const [isLoading, setIsLoading] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
 
   const getLocalizedText = (amharic: string, english: string, oromo?: string) => {
     switch (language) {
@@ -136,20 +133,17 @@ export function AuthModal({ isOpen, onClose, language }: AuthModalProps) {
       const result = await response.json();
 
       if (result.success) {
-        setCurrentUser(result.user);
-        
-        // Check if user has a proper name (not auto-generated)
-        if (result.user?.name && !result.user.name.includes('User') && !result.user.name.includes('Test User')) {
-          // User already has profile, log them in
-          login(result.user);
+        if (result.user?.name) {
+          // User already has profile, close modal
           toast.success(getLocalizedText('በተሳካ ሁኔታ ገብተዋል', 'Successfully logged in', 'Milkaa\'inaan seentan'));
           onClose();
+          window.location.reload();
         } else {
-          // New user or user without proper name, show profile setup
+          // New user, show profile setup
           setStep('profile');
         }
       } else {
-        toast.error(result.error || 'Invalid verification code');
+        toast.error(result.message);
       }
     } catch (error) {
       toast.error(getLocalizedText('ስህተት ተከስቷል', 'An error occurred', 'Dogoggorri uumame'));
@@ -170,23 +164,15 @@ export function AuthModal({ isOpen, onClose, language }: AuthModalProps) {
 
     setIsLoading(true);
     try {
-      // Update the user object with the names
-      const updatedUser = {
-        ...currentUser,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        name: `${firstName.trim()} ${lastName.trim()}`
-      };
-
-      // Log the user in with updated profile
-      login(updatedUser);
-      
+      const fullName = `${firstName.trim()} ${lastName.trim()}`;
+      // In a real implementation, you would call an API to update the profile
       toast.success(getLocalizedText(
         'መገለጫዎ ተሟልቷል',
         'Profile completed successfully',
         'Ibsi keessan milkaa\'inaan xumurame'
       ));
       onClose();
+      window.location.reload();
     } catch (error) {
       toast.error(getLocalizedText('ስህተት ተከስቷል', 'An error occurred', 'Dogoggorri uumame'));
     } finally {
@@ -207,7 +193,6 @@ export function AuthModal({ isOpen, onClose, language }: AuthModalProps) {
     setOtpMethod('sms');
     setOtpSent(false);
     setIsLoading(false);
-    setCurrentUser(null);
   };
 
   const handleClose = () => {
